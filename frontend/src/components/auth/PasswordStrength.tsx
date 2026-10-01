@@ -10,14 +10,11 @@ export interface PasswordStrength {
   filled: number;
 }
 
-const LEVEL_CONFIG: Record<
-  PasswordStrengthLevel,
-  { label: string; bar: string; text: string }
-> = {
+const LEVEL_CONFIG: Record<PasswordStrengthLevel, { label: string; bar: string; text: string }> = {
   weak: { label: "Weak", bar: "bg-danger", text: "text-danger" },
   fair: { label: "Fair", bar: "bg-amber-500", text: "text-amber-600" },
-  good: { label: "Good", bar: "bg-brand-600", text: "text-brand-700" },
-  strong: { label: "Strong", bar: "bg-success", text: "text-success" },
+  good: { label: "Good", bar: "bg-brand-500", text: "text-brand-700" },
+  strong: { label: "Strong", bar: "bg-emerald-500", text: "text-emerald-600" },
 };
 
 /** Purely visual heuristic. No validation library involved. */
@@ -45,53 +42,80 @@ interface PasswordStrengthMeterProps {
   password: string;
 }
 
-/** Four segment strength bar plus the minimum length check. */
+export const MIN_PASSWORD_LENGTH = 6;
+
+/** Four segment strength bar plus a minimum length check. */
 export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) {
   const { score, filled } = scorePassword(password);
   const config = LEVEL_CONFIG[score];
-  const hasMinimumLength = password.length >= 6;
+  const isTooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-ink-soft">Password strength</span>
+    <div className="mt-2.5">
+      <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium">
+        <span className="text-ink-soft">Password strength</span>
         <span
           aria-live="polite"
-          className={`text-xs font-semibold transition-colors duration-300 ${
+          className={`flex items-center gap-1 font-semibold transition-colors duration-300 ${
             password ? config.text : "text-slate-400"
           }`}
         >
+          {password ? <span className="size-1.5 rounded-full bg-current" /> : null}
           {password ? config.label : "—"}
         </span>
       </div>
 
-      <div className="flex gap-1.5" aria-hidden="true">
+      <div className="grid h-1.5 grid-cols-4 gap-1.5" aria-hidden="true">
         {[1, 2, 3, 4].map((segment) => (
           <span
             key={segment}
-            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+            className={`h-full rounded-full transition-colors duration-300 ${
               password && segment <= filled ? config.bar : "bg-slate-200"
             }`}
           />
         ))}
       </div>
 
-      <p className="flex items-center gap-1.5 text-[13px]">
-        <span
-          aria-hidden="true"
-          className={`flex size-4 items-center justify-center rounded-full transition-colors duration-300 ${
-            hasMinimumLength ? "bg-success/10 text-success" : "bg-slate-100 text-slate-400"
-          }`}
-        >
-          <Check className="size-2.5" strokeWidth={3} />
-        </span>
-        <span className={hasMinimumLength ? "text-ink-soft" : "text-slate-400"}>
-          At least 6 characters
-        </span>
-        <span className="sr-only">
-          {hasMinimumLength ? "Requirement met" : "Requirement not met"}
-        </span>
-      </p>
+      {isTooShort ? (
+        <p className="mt-1.5 text-[11px] font-medium text-amber-600">
+          Use at least {MIN_PASSWORD_LENGTH} characters.
+        </p>
+      ) : null}
+
+      <span className="sr-only">
+        {password
+          ? `Password strength: ${config.label}.`
+          : `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`}
+      </span>
     </div>
+  );
+}
+
+interface PasswordMatchHintProps {
+  password: string;
+  confirmPassword: string;
+}
+
+/** Live confirmation under the confirm password field. */
+export function PasswordMatchHint({ password, confirmPassword }: PasswordMatchHintProps) {
+  const hasConfirm = confirmPassword.length > 0;
+  const matches = hasConfirm && password === confirmPassword;
+
+  return (
+    <p
+      aria-live="polite"
+      className={`mt-1 flex min-h-[18px] items-center gap-1 text-[11px] font-medium ${
+        matches ? "text-emerald-600" : "text-transparent"
+      }`}
+    >
+      {matches ? (
+        <>
+          <Check aria-hidden="true" className="size-3.5" strokeWidth={2.4} />
+          Passwords match
+        </>
+      ) : (
+        <span aria-hidden="true">.</span>
+      )}
+    </p>
   );
 }

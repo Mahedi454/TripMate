@@ -1,30 +1,30 @@
 import type { Metadata } from "next";
-import { ShieldCheck } from "lucide-react";
-import { AuthHeader } from "@/components/auth/AuthHeader";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { RegisterForm } from "@/components/auth/RegisterForm";
 
 export const metadata: Metadata = {
   title: "Create your account",
-  description: "Start planning unforgettable trips together with TripMate.",
+  description: "Start planning better trips together with TripMate.",
 };
 
 export default function RegisterPage() {
   return (
-    <AuthLayout>
-      <AuthHeader
-        title="Create your TripMate account"
-        subtitle="Start planning unforgettable trips together."
-      >
-        <p className="flex items-start gap-2 text-[13px] leading-relaxed text-ink-soft">
-          <ShieldCheck
-            aria-hidden="true"
-            className="mt-px size-4 shrink-0 text-success"
-            strokeWidth={1.9}
-          />
-          TripMate never stores your password, so your account stays private to the sign in provider.
-        </p>
-      </AuthHeader>
+    <AuthLayout
+      headerAction={
+        <a
+          href="mailto:support@tripmate.app"
+          className="-my-2 inline-flex min-h-10 items-center rounded px-1 text-xs font-medium text-ink-soft transition-colors hover:text-night sm:text-sm"
+        >
+          Need help?
+        </a>
+      }
+    >
+      <header className="mb-6 sm:mb-7">
+        <h1 className="text-2xl font-extrabold tracking-tight text-night sm:text-3xl">
+          Create your account
+        </h1>
+        <p className="mt-1.5 font-body text-sm text-ink-soft">Start planning better trips together.</p>
+      </header>
 
       <RegisterForm />
     </AuthLayout>

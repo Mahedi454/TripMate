@@ -22,10 +22,10 @@ export function AuthLayout({ children, headerAction, footer }: AuthLayoutProps) 
     <main className="flex min-h-dvh w-full flex-col bg-white lg:flex-row">
       <AuthBrandPanel />
 
-      <div className="flex w-full flex-col lg:w-[46%] xl:w-[45%] 2xl:w-[600px]">
+      <div className="flex w-full flex-col lg:w-[46%] xl:w-[45%]">
         <AuthMobileBanner />
 
-        <section className="flex min-h-0 flex-1 flex-col p-5 sm:p-8 md:p-10 lg:p-12 lg:py-10 xl:p-14 short:p-8">
+        <section className="flex min-h-0 flex-1 flex-col px-5 py-6 sm:px-10 sm:py-10 lg:px-12 lg:py-10 xl:px-16 short:p-8">
           <header className="flex w-full items-center justify-between gap-3">
             <Logo />
             {headerAction}
@@ -60,7 +60,7 @@ function AuthMobileBanner() {
       className="relative h-28 shrink-0 overflow-hidden bg-slate-900 sm:h-36 md:h-44 lg:hidden very-short:hidden"
       style={{
         backgroundImage:
-          "linear-gradient(180deg, rgba(15,23,42,0.45) 0%, rgba(15,23,42,0.25) 45%, rgba(15,23,42,0.78) 100%), url('/images/auth-travel-sm.jpg')",
+          "linear-gradient(180deg, rgba(15,23,42,0.45) 0%, rgba(15,23,42,0.25) 45%, rgba(15,23,42,0.78) 100%), url('/images/splash-sm.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center 45%",
       }}

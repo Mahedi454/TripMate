@@ -4,11 +4,19 @@ import { forwardRef, useState } from "react";
 import { Eye, EyeOff, Lock } from "lucide-react";
 import { Input, type InputProps } from "@/components/ui/Input";
 
-export type PasswordInputProps = Omit<InputProps, "type" | "leadingIcon">;
+export type PasswordInputProps = Omit<InputProps, "type">;
 
 /** Password field with a show/hide toggle. */
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
-  function PasswordInput({ label = "Password", autoComplete = "current-password", ...rest }, ref) {
+  function PasswordInput(
+    {
+      label = "Password",
+      autoComplete = "current-password",
+      leadingIcon = <Lock className="size-[19px]" strokeWidth={2} />,
+      ...rest
+    },
+    ref,
+  ) {
     const [isVisible, setIsVisible] = useState(false);
 
     return (
@@ -17,7 +25,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
         type={isVisible ? "text" : "password"}
         label={label}
         autoComplete={autoComplete}
-        leadingIcon={<Lock className="size-[19px]" strokeWidth={2} />}
+        leadingIcon={leadingIcon}
         endAdornment={
           <button
             type="button"

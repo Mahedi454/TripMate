@@ -5,12 +5,13 @@ interface LogoProps {
   /** Renders as a link to the landing page. Set to false inside an existing link. */
   asLink?: boolean;
   className?: string;
-  iconClassName?: string;
+  /** Replaces the default mark size. Must include a Tailwind size utility. */
+  markClassName?: string;
   tone?: "light" | "dark";
 }
 
 /** TripMate wordmark: a compass mark plus the product name. */
-export function Logo({ asLink = true, className = "", iconClassName = "", tone = "dark" }: LogoProps) {
+export function Logo({ asLink = true, className = "", markClassName, tone = "dark" }: LogoProps) {
   const content = (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
       <span
@@ -18,7 +19,7 @@ export function Logo({ asLink = true, className = "", iconClassName = "", tone =
           tone === "light"
             ? "border border-white/25 bg-white/15 text-white backdrop-blur-md shadow-black/10"
             : "bg-brand-600 text-white shadow-brand-500/20"
-        } ${iconClassName}`}
+        } ${markClassName ?? "size-9"}`}
       >
         <Compass aria-hidden="true" className="size-5" strokeWidth={2.2} />
       </span>

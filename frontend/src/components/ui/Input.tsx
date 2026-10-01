@@ -13,6 +13,8 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   endAdornment?: ReactNode;
   /** Rendered on the right of the label row, e.g. a "Forgot password?" link. */
   labelAction?: ReactNode;
+  /** Overrides the label typography, for pages that use a smaller label scale. */
+  labelClassName?: string;
   containerClassName?: string;
 }
 
@@ -24,6 +26,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     leadingIcon,
     endAdornment,
     labelAction,
+    labelClassName = "text-sm font-medium text-ink",
     className = "",
     containerClassName = "",
     id,
@@ -40,7 +43,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   return (
     <div className={`flex flex-col gap-2 ${containerClassName}`}>
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={inputId} className="text-sm font-medium text-ink">
+        <label htmlFor={inputId} className={labelClassName}>
           {label}
         </label>
         {labelAction}
