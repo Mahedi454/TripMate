@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import { MapPin, ShieldCheck } from "lucide-react";
 import { AuthBrandPanel } from "@/components/auth/AuthBrandPanel";
 import { Logo } from "@/components/ui/Logo";
 
 interface AuthLayoutProps {
   children: ReactNode;
+  /** Hero photo for the left panel on large screens. */
+  heroImage?: string;
   /** Optional helper rendered at the top right of the form column. */
   headerAction?: ReactNode;
   /** Optional trust note under the form. Defaults to the shared security line. */
@@ -17,10 +20,10 @@ interface AuthLayoutProps {
  * - Below `lg`: a compact photo banner replaces the panel, so the form owns the width.
  * - Short viewports (landscape phones) drop the banner and tighten the spacing.
  */
-export function AuthLayout({ children, headerAction, footer }: AuthLayoutProps) {
+export function AuthLayout({ children, heroImage, headerAction, footer }: AuthLayoutProps) {
   return (
     <main className="flex min-h-dvh w-full flex-col bg-white lg:flex-row">
-      <AuthBrandPanel />
+      <AuthBrandPanel imageSrc={heroImage} />
 
       <div className="flex w-full flex-col lg:w-[46%] xl:w-[45%]">
         <AuthMobileBanner />
@@ -51,21 +54,30 @@ export function AuthLayout({ children, headerAction, footer }: AuthLayoutProps) 
 
 /**
  * Photo banner for phones and tablets, where the split panel is hidden.
- * Uses a pre-cropped asset as a CSS background so nothing is downloaded twice.
+ * Served through next/image so the 5600px source is downscaled and re-encoded
+ * for the banner instead of shipping the original to every phone.
  */
 function AuthMobileBanner() {
   return (
     <div
       aria-hidden="true"
       className="relative h-28 shrink-0 overflow-hidden bg-slate-900 sm:h-36 md:h-44 lg:hidden very-short:hidden"
-      style={{
-        backgroundImage:
-          "linear-gradient(180deg, rgba(15,23,42,0.45) 0%, rgba(15,23,42,0.25) 45%, rgba(15,23,42,0.78) 100%), url('/images/splash-sm.jpg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center 45%",
-      }}
     >
-      <div className="flex h-full flex-col justify-between p-5 sm:p-6">
+      <Image
+        src="/images/splash.jpg"
+        alt=""
+        fill
+        sizes="100vw"
+        className="pointer-events-none object-cover object-[center_45%]"
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            "linear-gradient(180deg, rgba(15,23,42,0.45) 0%, rgba(15,23,42,0.25) 45%, rgba(15,23,42,0.78) 100%)",
+        }}
+      />
+      <div className="relative flex h-full flex-col justify-between p-5 sm:p-6">
         <span className="inline-flex w-fit items-center gap-2 self-end rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-medium text-white/90">
           <span className="size-1.5 rounded-full bg-emerald-400" />
           Shared itineraries live

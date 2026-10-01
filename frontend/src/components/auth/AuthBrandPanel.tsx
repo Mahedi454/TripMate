@@ -10,21 +10,38 @@ const TRAVELLERS = [
 ];
 
 /**
+ * `sizes` has to describe the size the image is *rendered* at, which for
+ * `object-cover` is driven by the box height whenever the source is wider than
+ * the box. A landscape photo inside this portrait column is therefore laid out
+ * far wider than the column itself, and asking for `55vw` alone leaves the
+ * browser upscaling the delivered pixels (measured 1.9x to 3.8x soft).
+ *
+ * The `100vw` fallback covers the sub-`lg` case, where the panel is hidden but
+ * the markup is still in the DOM and the browser still fetches one small copy.
+ */
+const COVER_SIZES: Record<string, string> = {
+  "/images/Login.png": "(min-width: 1024px) 210vh, 100vw",
+  "/images/Register.png": "(min-width: 1024px) 210vh, 100vw",
+};
+
+/**
  * Left hand brand panel: travel photography, tagline, social proof.
  * Hidden below `lg`, where the compact banner in AuthLayout takes over.
+ *
+ * @param imageSrc Page specific hero photo. Portrait photos suit the column best.
  */
-export function AuthBrandPanel() {
+export function AuthBrandPanel({ imageSrc = "/images/splash.jpg" }: { imageSrc?: string }) {
   return (
     <aside
       aria-hidden="true"
       className="relative hidden w-[54%] select-none flex-col justify-between overflow-hidden bg-slate-950 lg:flex xl:w-[55%]"
     >
       <Image
-        src="/images/splash.jpg"
+        src={imageSrc}
         alt=""
         fill
         priority
-        sizes="55vw"
+        sizes={COVER_SIZES[imageSrc] ?? "(min-width: 1024px) 55vw, 100vw"}
         className="pointer-events-none object-cover object-center"
       />
 

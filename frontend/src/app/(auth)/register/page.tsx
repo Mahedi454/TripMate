@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 export default function RegisterPage() {
   return (
     <AuthLayout
+      heroImage="/images/Register.png"
       headerAction={
         <a
           href="mailto:support@tripmate.app"
