@@ -2,6 +2,10 @@ import Link from "next/link";
 import { Compass, MapPin, Navigation, ShieldCheck, Vote } from "lucide-react";
 import { buttonClasses } from "@/components/ui/button-styles";
 import { Logo } from "@/components/ui/Logo";
+import { getCurrentUser } from "@/lib/supabase/server";
+
+// Reads the session cookie, so it must never be prerendered.
+export const dynamic = "force-dynamic";
 
 const FEATURES = [
   {
@@ -21,21 +25,31 @@ const FEATURES = [
   },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await getCurrentUser();
+
   return (
     <main className="min-h-dvh bg-canvas">
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-5 sm:gap-4 sm:px-8 sm:py-6">
         <Logo />
         <nav className="flex shrink-0 items-center gap-0.5 sm:gap-2" aria-label="Main">
-          <Link
-            href="/login"
-            className="hidden rounded-xl px-2 text-[13px] font-medium text-ink-soft transition hover:bg-white hover:text-ink min-[360px]:inline-flex min-h-10 items-center sm:px-3.5 sm:text-sm"
-          >
-            Sign in
-          </Link>
-          <Link href="/register" className={buttonClasses({ size: "sm", className: "px-3 sm:px-3.5" })}>
-            Get started
-          </Link>
+          {user ? (
+            <Link href="/dashboard" className={buttonClasses({ size: "sm", className: "px-3 sm:px-3.5" })}>
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="hidden rounded-xl px-2 text-[13px] font-medium text-ink-soft transition hover:bg-white hover:text-ink min-[360px]:inline-flex min-h-10 items-center sm:px-3.5 sm:text-sm"
+              >
+                Sign in
+              </Link>
+              <Link href="/register" className={buttonClasses({ size: "sm", className: "px-3 sm:px-3.5" })}>
+                Get started
+              </Link>
+            </>
+          )}
         </nav>
       </header>
 

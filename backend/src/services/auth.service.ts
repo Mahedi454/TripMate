@@ -58,6 +58,8 @@ function toPublicUser(doc: UserDoc): PublicUser {
     avatar: doc.avatar,
     role: doc.role,
     status: doc.status,
+    lastLoginAt: doc.lastLoginAt ? doc.lastLoginAt.toISOString() : null,
+    loginCount: doc.loginCount ?? 0,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };
@@ -96,6 +98,74 @@ export async function createOrGetUserProfile(input: CreateProfileInput): Promise
     }
     throw error;
   }
+}
+
+function readMetadataString(metadata: Record<string, unknown> | undefined, key: string): string {
+  const value = metadata?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** Display name from signUp metadata (`full_name`) or Google (`name`), else the email. */
+function displayNameFor(supabaseUser: SupabaseAuthUser): string {
+  const metadata = supabaseUser.user_metadata as Record<string, unknown> | undefined;
+  const candidate =
+    readMetadataString(metadata, "full_name") ||
+    readMetadataString(metadata, "name") ||
+    (supabaseUser.email ?? "").split("@")[0] ||
+    "";
+  const name = candidate.slice(0, 50);
+  return name.length >= 2 ? name : "TripMate user";
+}
+
+/**
+ * Called after every successful sign-in (password, Google, email link).
+ * Creates the MongoDB profile if it is missing and records the login.
+ * Emails listed in ADMIN_EMAILS are promoted to admin here.
+ */
+export async function syncUserOnLogin(supabaseUser: SupabaseAuthUser): Promise<PublicUser> {
+  const email = supabaseUser.email?.toLowerCase();
+  if (!email) {
+    throw ApiError.badRequest("This account has no email address");
+  }
+
+  const existing = await User.findOne({ supabaseId: supabaseUser.id });
+  if (existing?.status === "suspended") {
+    throw ApiError.forbidden("This account has been suspended");
+  }
+
+  const metadata = supabaseUser.user_metadata as Record<string, unknown> | undefined;
+  const set: Record<string, unknown> = { email, lastLoginAt: new Date() };
+  if (env.adminEmails.includes(email)) {
+    set.role = "admin";
+  }
+
+  try {
+    const updated = await User.findOneAndUpdate(
+      { supabaseId: supabaseUser.id },
+      {
+        $set: set,
+        $inc: { loginCount: 1 },
+        // Only applied when the profile is created by this call.
+        $setOnInsert: {
+          name: displayNameFor(supabaseUser),
+          avatar: readMetadataString(metadata, "avatar_url"),
+        },
+      },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+    );
+    return toPublicUser(updated.toObject());
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      throw ApiError.conflict("Another TripMate profile already uses this email");
+    }
+    throw error;
+  }
+}
+
+/** Every profile, newest first. Admin only. */
+export async function listUsers(): Promise<PublicUser[]> {
+  const users = await User.find().sort({ createdAt: -1 }).limit(500);
+  return users.map((user) => toPublicUser(user.toObject()));
 }
 
 export async function findUserBySupabaseId(supabaseId: string): Promise<PublicUser | null> {

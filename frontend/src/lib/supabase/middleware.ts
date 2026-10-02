@@ -10,13 +10,13 @@ import {
 const AUTH_ROUTES = ["/login", "/register", "/forgot-password"];
 
 /** Page to send users to after signing in. */
-const POST_SIGN_IN_PATH = "/";
+const POST_SIGN_IN_PATH = "/dashboard";
 
 /**
  * Routes that require a session. Add prefixes here as the app grows, e.g.
  * `"/dashboard"`, `"/trips"`.
  */
-const PROTECTED_PREFIXES: string[] = [];
+const PROTECTED_PREFIXES: string[] = ["/dashboard", "/admin"];
 
 function isProtected(pathname: string) {
   return PROTECTED_PREFIXES.some(

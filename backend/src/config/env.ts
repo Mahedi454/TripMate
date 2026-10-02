@@ -11,6 +11,9 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20, "SUPABASE_SERVICE_ROLE_KEY is required"),
 
   FRONTEND_URL: z.string().default("http://localhost:3000"),
+
+  // Comma separated emails that are promoted to the admin role when they sign in.
+  ADMIN_EMAILS: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -27,10 +30,15 @@ const allowedOrigins = parsed.data.FRONTEND_URL.split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const adminEmails = parsed.data.ADMIN_EMAILS.split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
 export const env = {
   ...parsed.data,
   isProduction: parsed.data.NODE_ENV === "production",
   allowedOrigins,
+  adminEmails,
 };
 
 export type Env = typeof env;

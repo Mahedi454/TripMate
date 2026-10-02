@@ -48,3 +48,29 @@ export async function getCurrentUser() {
     return null;
   }
 }
+
+/**
+ * Access token of the verified user, for calling the Express API from server
+ * code. `getUser()` runs first so a forged cookie is never forwarded.
+ */
+export async function getAccessToken() {
+  if (!isSupabaseConfigured) {
+    return null;
+  }
+
+  try {
+    const supabase = await getSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return null;
+    }
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}

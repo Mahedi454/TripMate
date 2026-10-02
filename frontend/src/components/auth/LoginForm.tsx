@@ -10,6 +10,7 @@ import { PasswordInput } from "@/components/auth/PasswordInput";
 import { SocialButton } from "@/components/auth/SocialButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { syncLogin } from "@/lib/api";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { authErrorMessage } from "@/lib/supabase/errors";
 
@@ -62,7 +63,7 @@ export function LoginForm() {
 
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
@@ -72,9 +73,19 @@ export function LoginForm() {
         return;
       }
 
+      // Records the login in MongoDB. If that fails (backend down, account
+      // suspended) the Supabase session is dropped so the two never disagree.
+      try {
+        await syncLogin(data.session.access_token);
+      } catch (syncError) {
+        await supabase.auth.signOut();
+        setFormError(syncError instanceof Error ? syncError.message : GENERIC_ERROR);
+        return;
+      }
+
       // `next` is set by the route guard so a deep link survives the sign-in.
       const next = searchParams.get("next");
-      const destination = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      const destination = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
 
       router.replace(destination);
       router.refresh();

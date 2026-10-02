@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
 import { User } from "../models/User.js";
 import { verifyAccessToken } from "../services/auth.service.js";
 import type { AuthContext, UserRole } from "../types/auth.js";
@@ -12,6 +13,8 @@ declare global {
       auth?: AuthContext;
       /** Raw access token, useful for downstream calls (e.g. Supabase storage). */
       accessToken?: string;
+      /** Set by requireToken: the verified Supabase user, profile not required. */
+      supabaseUser?: SupabaseAuthUser;
     }
   }
 }
@@ -26,6 +29,21 @@ function readBearerToken(req: Request): string | null {
     return null;
   }
   return token.trim();
+}
+
+/**
+ * Verifies the Supabase access token only. Used by /sync, which is what
+ * creates the MongoDB profile, so the profile may not exist yet.
+ */
+export async function requireToken(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  const token = readBearerToken(req);
+  if (!token) {
+    throw ApiError.unauthorized("Missing Authorization: Bearer <access token> header");
+  }
+
+  req.accessToken = token;
+  req.supabaseUser = await verifyAccessToken(token);
+  next();
 }
 
 /**

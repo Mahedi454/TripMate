@@ -40,7 +40,7 @@ async function handleGoogleSignIn() {
   const supabase = getSupabaseBrowserClient();
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: callbackUrl("/auth/callback?next=/") },
+    options: { redirectTo: callbackUrl("/auth/callback?next=/dashboard") },
   });
 
   if (error) {

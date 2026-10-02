@@ -1,8 +1,13 @@
 import type { Request, Response } from "express";
 import { createProfileSchema } from "../schemas/auth.schema.js";
-import { createOrGetUserProfile } from "../services/auth.service.js";
+import {
+  createOrGetUserProfile,
+  findUserBySupabaseId,
+  listUsers,
+  syncUserOnLogin,
+} from "../services/auth.service.js";
 import { ApiError } from "../middleware/error.middleware.js";
-import type { CreateProfileResponse } from "../types/auth.js";
+import type { CreateProfileResponse, UserListResponse, UserResponse } from "../types/auth.js";
 
 /**
  * POST /api/auth/profile
@@ -31,4 +36,52 @@ export async function createProfile(req: Request, res: Response): Promise<void> 
     success: true,
     user,
   } satisfies CreateProfileResponse);
+}
+
+/**
+ * POST /api/auth/sync
+ * Header: Authorization: Bearer <supabase access token>
+ *
+ * Called after every successful sign-in. Creates the profile when missing and
+ * records lastLoginAt / loginCount.
+ */
+export async function syncLogin(req: Request, res: Response): Promise<void> {
+  if (!req.supabaseUser) {
+    throw ApiError.unauthorized();
+  }
+
+  const user = await syncUserOnLogin(req.supabaseUser);
+
+  res.json({
+    success: true,
+    user,
+  } satisfies UserResponse);
+}
+
+/** GET /api/auth/me - the signed-in user's profile. */
+export async function getMe(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    throw ApiError.unauthorized();
+  }
+
+  const user = await findUserBySupabaseId(req.auth.supabaseId);
+  if (!user) {
+    throw ApiError.notFound("TripMate profile not found");
+  }
+
+  res.json({
+    success: true,
+    user,
+  } satisfies UserResponse);
+}
+
+/** GET /api/admin/users - every registered user with their login stats. */
+export async function getAllUsers(_req: Request, res: Response): Promise<void> {
+  const users = await listUsers();
+
+  res.json({
+    success: true,
+    total: users.length,
+    users,
+  } satisfies UserListResponse);
 }

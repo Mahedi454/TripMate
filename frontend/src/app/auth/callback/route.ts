@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { syncLogin } from "@/lib/api";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -11,10 +12,10 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  const next = searchParams.get("next") ?? "/dashboard";
 
   // Only ever redirect to a path on this origin, never to an absolute URL.
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`);
@@ -22,10 +23,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = await getSupabaseServerClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
       return NextResponse.redirect(`${origin}/login?error=callback_failed`);
+    }
+
+    // Google sign-ins and email confirmations land here, so this is where
+    // their MongoDB profile is created and the login recorded.
+    try {
+      await syncLogin(data.session.access_token);
+    } catch {
+      await supabase.auth.signOut();
+      return NextResponse.redirect(`${origin}/login?error=sync_failed`);
     }
   } catch {
     return NextResponse.redirect(`${origin}/login?error=not_configured`);

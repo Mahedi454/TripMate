@@ -15,6 +15,7 @@ import {
 import { SocialButton } from "@/components/auth/SocialButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { apiRequest, syncLogin } from "@/lib/api";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { authErrorMessage, callbackUrl } from "@/lib/supabase/errors";
 
@@ -46,7 +47,6 @@ export function RegisterForm() {
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   /** Set when the project requires email confirmation before a session exists. */
   const [awaitingConfirmation, setAwaitingConfirmation] = useState<string | null>(null);
@@ -55,7 +55,6 @@ export function RegisterForm() {
     setValues((previous) => ({ ...previous, [field]: value }));
     setFieldErrors((previous) => ({ ...previous, [field]: undefined }));
     setFormError(null);
-    setIsSuccess(false);
     setAwaitingConfirmation(null);
   }
 
@@ -99,7 +98,7 @@ export function RegisterForm() {
           // signUp only accepts email and password, so the name rides along as
           // metadata. A database trigger copies it into public.profiles.
           data: { full_name: values.name.trim() },
-          emailRedirectTo: callbackUrl("/auth/callback?next=/"),
+          emailRedirectTo: callbackUrl("/auth/callback?next=/dashboard"),
         },
       });
 
@@ -109,10 +108,33 @@ export function RegisterForm() {
       }
 
       if (data.session) {
-        // Email confirmation is off, so they are signed in already.
-        router.replace("/");
+        // Email confirmation is off, so they are signed in already. This also
+        // creates the MongoDB profile and counts the first login.
+        try {
+          await syncLogin(data.session.access_token);
+        } catch (syncError) {
+          await supabase.auth.signOut();
+          setFormError(syncError instanceof Error ? syncError.message : GENERIC_ERROR);
+          return;
+        }
+        router.replace("/dashboard");
         router.refresh();
         return;
+      }
+
+      // Email confirmation is on: no session yet, but save the profile now so
+      // the registration shows up in MongoDB straight away. Supabase returns a
+      // user with no identities when the email is already registered.
+      if (data.user && (data.user.identities?.length ?? 0) > 0) {
+        try {
+          await apiRequest("/api/auth/profile", {
+            method: "POST",
+            body: { supabaseId: data.user.id, name: values.name.trim(), email: values.email.trim() },
+          });
+        } catch (profileError) {
+          // Not fatal: /api/auth/sync creates the profile on their first sign-in.
+          console.warn("[register] could not create the TripMate profile yet", profileError);
+        }
       }
 
       setAwaitingConfirmation(values.email.trim());
@@ -127,14 +149,6 @@ export function RegisterForm() {
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
       {formError ? (
         <AuthAlert title={formError} message="Please check the highlighted fields and try again." />
-      ) : null}
-
-      {isSuccess ? (
-        <AuthAlert
-          variant="success"
-          title="Account created successfully."
-          message="You are now signed in. Start planning your first trip together."
-        />
       ) : null}
 
       {awaitingConfirmation ? (
@@ -223,7 +237,6 @@ export function RegisterForm() {
               setHasAcceptedTerms(event.target.checked);
               setFieldErrors((previous) => ({ ...previous, terms: undefined }));
               setFormError(null);
-              setIsSuccess(false);
             }}
             disabled={isLoading}
             aria-invalid={fieldErrors.terms ? true : undefined}

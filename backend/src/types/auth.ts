@@ -13,6 +13,8 @@ export interface PublicUser {
   avatar: string;
   role: UserRole;
   status: UserStatus;
+  lastLoginAt: string | null;
+  loginCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -29,6 +31,17 @@ export interface AuthContext {
 export interface CreateProfileResponse {
   success: true;
   user: PublicUser;
+}
+
+export interface UserResponse {
+  success: true;
+  user: PublicUser;
+}
+
+export interface UserListResponse {
+  success: true;
+  total: number;
+  users: PublicUser[];
 }
 
 export interface HealthResponse {

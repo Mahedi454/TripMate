@@ -9,6 +9,8 @@ export interface UserDoc {
   avatar: string;
   role: UserRole;
   status: UserStatus;
+  lastLoginAt: Date | null;
+  loginCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -51,6 +53,16 @@ const userSchema = new mongoose.Schema<UserDoc>(
       type: String,
       enum: USER_STATUSES,
       default: "active",
+    },
+    // Updated by POST /api/auth/sync every time the user signs in.
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    loginCount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   {
