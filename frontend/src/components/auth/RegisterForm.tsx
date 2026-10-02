@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
 import { ArrowRight, Mail, ShieldCheck, UserRound } from "lucide-react";
 import { AuthAlert } from "@/components/auth/AuthAlert";
 import { AuthDivider } from "@/components/auth/AuthDivider";
@@ -14,6 +15,8 @@ import {
 import { SocialButton } from "@/components/auth/SocialButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { authErrorMessage, callbackUrl } from "@/lib/supabase/errors";
 
 interface FieldErrors {
   name?: string;
@@ -29,8 +32,11 @@ const LABEL_CLASS = "text-xs font-semibold text-ink";
 /** Widens the dots of a masked password, matching the supplied design. */
 const MASKED_DOTS = "tracking-[0.18em]";
 
-/** UI only. Nothing is submitted, stored or hashed. */
+const GENERIC_ERROR = "We could not create your account";
+
+/** Creates the account through Supabase Auth. */
 export function RegisterForm() {
+  const router = useRouter();
   const [values, setValues] = useState({
     name: "",
     email: "",
@@ -42,25 +48,18 @@ export function RegisterForm() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
-  }, []);
+  /** Set when the project requires email confirmation before a session exists. */
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState<string | null>(null);
 
   function updateField(field: keyof typeof values, value: string) {
     setValues((previous) => ({ ...previous, [field]: value }));
     setFieldErrors((previous) => ({ ...previous, [field]: undefined }));
     setFormError(null);
     setIsSuccess(false);
+    setAwaitingConfirmation(null);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const errors: FieldErrors = {};
@@ -89,12 +88,39 @@ export function RegisterForm() {
       return;
     }
 
-    // Mock request, so the loading state is visible while designing.
     setIsLoading(true);
-    timerRef.current = setTimeout(() => {
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase.auth.signUp({
+        email: values.email.trim(),
+        password: values.password,
+        options: {
+          // signUp only accepts email and password, so the name rides along as
+          // metadata. A database trigger copies it into public.profiles.
+          data: { full_name: values.name.trim() },
+          emailRedirectTo: callbackUrl("/auth/callback?next=/"),
+        },
+      });
+
+      if (error) {
+        setFormError(authErrorMessage(error, GENERIC_ERROR));
+        return;
+      }
+
+      if (data.session) {
+        // Email confirmation is off, so they are signed in already.
+        router.replace("/");
+        router.refresh();
+        return;
+      }
+
+      setAwaitingConfirmation(values.email.trim());
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : GENERIC_ERROR);
+    } finally {
       setIsLoading(false);
-      setIsSuccess(true);
-    }, 1600);
+    }
   }
 
   return (
@@ -107,7 +133,15 @@ export function RegisterForm() {
         <AuthAlert
           variant="success"
           title="Account created successfully."
-          message="This is a static UI state, so no account was actually created."
+          message="You are now signed in. Start planning your first trip together."
+        />
+      ) : null}
+
+      {awaitingConfirmation ? (
+        <AuthAlert
+          variant="success"
+          title="Check your inbox to confirm your email."
+          message={`We sent a confirmation link to ${awaitingConfirmation}. Open it to finish setting up your account.`}
         />
       ) : null}
 

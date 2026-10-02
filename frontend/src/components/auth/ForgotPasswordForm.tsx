@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { ArrowLeft, CheckCircle, Mail, Send } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { buttonClasses } from "@/components/ui/button-styles";
 import { Input } from "@/components/ui/Input";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { authErrorMessage, callbackUrl } from "@/lib/supabase/errors";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -14,7 +16,7 @@ interface ForgotPasswordSuccessProps {
   onTryAnotherEmail: () => void;
 }
 
-/** Static confirmation screen. No email is ever sent. */
+/** Confirmation screen shown after the reset email is requested. */
 function ForgotPasswordSuccess({ email, onTryAnotherEmail }: ForgotPasswordSuccessProps) {
   return (
     <div className="animate-slide-up text-center" role="status" aria-live="polite">
@@ -65,24 +67,14 @@ function ForgotPasswordSuccess({ email, onTryAnotherEmail }: ForgotPasswordSucce
   );
 }
 
-/** UI only. No reset link is generated and no email is sent. */
+/** Sends the password reset email through Supabase Auth. */
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
 
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
-  }, []);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmed = email.trim();
@@ -99,11 +91,28 @@ export function ForgotPasswordForm() {
     setError(undefined);
     setIsLoading(true);
 
-    // Mock request, so the loading state is visible while designing.
-    timerRef.current = setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: callbackUrl("/reset-password"),
+      });
+
+      if (resetError) {
+        setError(authErrorMessage(resetError, "We could not send that email. Please try again."));
+        return;
+      }
+
+      // Always report the same thing, whether or not the address is registered.
       setSubmittedEmail(trimmed);
-    }, 1600);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "We could not reach the authentication service.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   if (submittedEmail) {

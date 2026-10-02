@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { LoginForm } from "@/components/auth/LoginForm";
@@ -26,7 +27,13 @@ export default function LoginPage() {
         subtitle="Sign in to continue planning your next adventure."
       />
 
-      <LoginForm />
+      {/*
+        LoginForm reads ?next and ?error with useSearchParams, which opts this
+        page out of static rendering unless it sits behind a Suspense boundary.
+      */}
+      <Suspense fallback={null}>
+        <LoginForm />
+      </Suspense>
     </AuthLayout>
   );
 }

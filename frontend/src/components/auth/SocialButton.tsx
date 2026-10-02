@@ -1,10 +1,14 @@
 "use client";
 
-import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { forwardRef, useState, type ButtonHTMLAttributes, type MouseEvent } from "react";
 import { Button } from "@/components/ui/Button";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { callbackUrl } from "@/lib/supabase/errors";
 
 export interface SocialButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   label?: string;
+  /** Supplying this replaces the built in OAuth handler. */
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
 }
 
 /** Google "G" mark, drawn inline so the project needs no brand asset. */
@@ -31,16 +35,52 @@ function GoogleMark() {
   );
 }
 
-/** Outlined "Continue with Google" button. UI only: no OAuth request is made. */
+/** Starts the Google OAuth flow. The redirect returns through /auth/callback. */
+async function handleGoogleSignIn() {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: callbackUrl("/auth/callback?next=/") },
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+/** Outlined "Continue with Google" button. */
 export const SocialButton = forwardRef<HTMLButtonElement, SocialButtonProps>(
-  function SocialButton({ label = "Continue with Google", ...rest }, ref) {
+  function SocialButton({ label = "Continue with Google", onClick, ...rest }, ref) {
+    const [isLoading, setIsLoading] = useState(false);
+
+    async function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
+      if (onClick) {
+        onClick(event);
+        return;
+      }
+
+      event.preventDefault();
+      setIsLoading(true);
+
+      try {
+        // Leaves the page, so the loading state only shows if it fails.
+        await handleGoogleSignIn();
+      } catch {
+        setIsLoading(false);
+      }
+    }
+
     return (
       <Button
         ref={ref}
+        type="button"
         variant="secondary"
         size="lg"
         className="gap-3 text-sm shadow-sm active:scale-[0.985]"
         leadingIcon={<GoogleMark />}
+        isLoading={isLoading}
+        loadingText="Opening Google..."
+        onClick={handleClick}
         {...rest}
       >
         {label}

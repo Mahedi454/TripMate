@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, type FormEvent } from "react";
 import { Mail } from "lucide-react";
 import { AuthAlert } from "@/components/auth/AuthAlert";
 import { AuthDivider } from "@/components/auth/AuthDivider";
@@ -9,6 +10,8 @@ import { PasswordInput } from "@/components/auth/PasswordInput";
 import { SocialButton } from "@/components/auth/SocialButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { authErrorMessage } from "@/lib/supabase/errors";
 
 interface FieldErrors {
   email?: string;
@@ -17,25 +20,24 @@ interface FieldErrors {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-/** UI only. No credential is ever sent anywhere. */
+const GENERIC_ERROR = "Incorrect email or password";
+
+/** Signs in against Supabase Auth. */
 export function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
+  const callbackError = searchParams.get("error");
+  const [formError, setFormError] = useState<string | null>(
+    callbackError
+      ? "We could not complete that sign-in link. Please try again."
+      : null,
+  );
   const [isLoading, setIsLoading] = useState(false);
 
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
-  }, []);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const errors: FieldErrors = {};
@@ -56,12 +58,31 @@ export function LoginForm() {
       return;
     }
 
-    // Mock request, so the loading state is visible while designing.
     setIsLoading(true);
-    timerRef.current = setTimeout(() => {
+
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        setFormError(authErrorMessage(error, GENERIC_ERROR));
+        return;
+      }
+
+      // `next` is set by the route guard so a deep link survives the sign-in.
+      const next = searchParams.get("next");
+      const destination = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+
+      router.replace(destination);
+      router.refresh();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : GENERIC_ERROR);
+    } finally {
       setIsLoading(false);
-      setFormError("Incorrect email or password");
-    }, 1500);
+    }
   }
 
   return (
