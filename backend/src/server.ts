@@ -1,9 +1,14 @@
 import type { Server } from "node:http";
 import app from "./app.js";
 import { connectDatabase, disconnectDatabase, logDatabaseError } from "./config/db.js";
-import { env } from "./config/env.js";
+import { env, envIssues } from "./config/env.js";
 
 async function bootstrap(): Promise<void> {
+  if (envIssues.length > 0) {
+    // Already printed by config/env.ts; locally there is no point starting.
+    process.exit(1);
+  }
+
   try {
     await connectDatabase();
   } catch (error) {

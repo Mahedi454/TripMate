@@ -24,27 +24,47 @@ const envSchema = z.object({
   ADMIN_EMAILS: z.string().default(""),
 });
 
+type EnvValues = z.infer<typeof envSchema>;
+
 const parsed = envSchema.safeParse(process.env);
 
-if (!parsed.success) {
-  const details = parsed.error.issues
-    .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
-    .join("\n");
+/**
+ * What is wrong with the environment, one line per variable. Never contains
+ * values, so it is safe to return from the API.
+ */
+export const envIssues: string[] = parsed.success
+  ? []
+  : parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
 
-  throw new Error(`Invalid environment variables:\n${details}`);
+if (!parsed.success) {
+  console.error(`[env] Invalid environment variables:\n  - ${envIssues.join("\n  - ")}`);
 }
 
-const allowedOrigins = parsed.data.FRONTEND_URL.split(",")
+// Throwing here would crash the whole Vercel function with a bare 500, so
+// boot anyway with every invalid value unset; app.ts then answers each
+// request with envIssues instead. server.ts still exits early in development.
+const lenientEnvSchema = z.object(
+  Object.fromEntries(
+    Object.entries(envSchema.shape).map(([key, schema]) => [
+      key,
+      (schema as z.ZodTypeAny).catch(undefined),
+    ]),
+  ),
+);
+
+const values = (parsed.success ? parsed.data : lenientEnvSchema.parse(process.env)) as EnvValues;
+
+const allowedOrigins = (values.FRONTEND_URL ?? "").split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-const adminEmails = parsed.data.ADMIN_EMAILS.split(",")
+const adminEmails = (values.ADMIN_EMAILS ?? "").split(",")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
 
 export const env = {
-  ...parsed.data,
-  isProduction: parsed.data.NODE_ENV === "production",
+  ...values,
+  isProduction: values.NODE_ENV === "production",
   allowedOrigins,
   adminEmails,
 };
