@@ -10,7 +10,7 @@ interface LogoProps {
   tone?: "light" | "dark";
 }
 
-/** TripMate wordmark: a compass mark plus the product name. */
+/** TripPilot wordmark: a compass mark plus the product name. */
 export function Logo({ asLink = true, className = "", markClassName, tone = "dark" }: LogoProps) {
   const content = (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
@@ -26,7 +26,7 @@ export function Logo({ asLink = true, className = "", markClassName, tone = "dar
       <span
         className={`text-lg font-bold tracking-tight sm:text-xl ${tone === "light" ? "text-white" : "text-night"}`}
       >
-        TripMate
+        TripPilot
       </span>
     </span>
   );
@@ -38,7 +38,7 @@ export function Logo({ asLink = true, className = "", markClassName, tone = "dar
   return (
     <Link
       href="/"
-      aria-label="TripMate home"
+      aria-label="TripPilot home"
       className={`group inline-flex shrink-0 items-center rounded-xl py-1 ${className}`}
     >
       {content}

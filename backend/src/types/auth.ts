@@ -7,7 +7,7 @@ export type UserStatus = (typeof USER_STATUSES)[number];
 /** Shape returned to the frontend. Never includes any credential material. */
 export interface PublicUser {
   id: string;
-  supabaseId: string;
+  firebaseUid: string;
   name: string;
   email: string;
   avatar: string;
@@ -21,7 +21,7 @@ export interface PublicUser {
 
 /** Verified identity attached to `req.auth` by the auth middleware. */
 export interface AuthContext {
-  supabaseId: string;
+  firebaseUid: string;
   email: string;
   role: UserRole;
   status: UserStatus;

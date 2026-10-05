@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { signOut } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase/client";
 
-/** Ends the Supabase session and returns to the login page. */
+/** Ends the Firebase session and returns to the login page. */
 export function SignOutButton() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -14,10 +15,9 @@ export function SignOutButton() {
   async function handleSignOut() {
     setIsLoading(true);
     try {
-      await getSupabaseBrowserClient().auth.signOut();
+      await signOut(getFirebaseAuth());
     } finally {
       router.replace("/login");
-      router.refresh();
     }
   }
 

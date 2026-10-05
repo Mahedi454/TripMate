@@ -1,36 +1,33 @@
 import type { Request, Response } from "express";
-import { createProfileSchema } from "../schemas/auth.schema.js";
+import { registerProfileSchema } from "../schemas/auth.schema.js";
 import {
-  createOrGetUserProfile,
-  findUserBySupabaseId,
+  findUserByFirebaseUid,
   listUsers,
+  registerProfile,
   syncUserOnLogin,
 } from "../services/auth.service.js";
 import { ApiError } from "../middleware/error.middleware.js";
 import type { CreateProfileResponse, UserListResponse, UserResponse } from "../types/auth.js";
 
 /**
- * POST /api/auth/profile
- * Body: { supabaseId, name, email }
+ * POST /api/auth/register
+ * Header: Authorization: Bearer <Firebase ID token>
+ * Body: { name }
  *
- * Runs right after Supabase signUp. Idempotent, so a retry is safe.
- * When the request also carries a valid access token, the token's user id
- * must match the body, otherwise the profile is created for somebody else.
+ * Runs right after createUserWithEmailAndPassword, before the email is
+ * verified. Uid and email come from the token, never from the body.
  */
-export async function createProfile(req: Request, res: Response): Promise<void> {
-  const parsed = createProfileSchema.safeParse(req.body);
+export async function registerUser(req: Request, res: Response): Promise<void> {
+  if (!req.firebaseUser) {
+    throw ApiError.unauthorized();
+  }
 
+  const parsed = registerProfileSchema.safeParse(req.body);
   if (!parsed.success) {
     throw ApiError.badRequest("Profile validation failed", parsed.error.flatten());
   }
 
-  const { supabaseId } = parsed.data;
-
-  if (req.auth && req.auth.supabaseId !== supabaseId) {
-    throw ApiError.forbidden("Session does not match the supplied supabaseId");
-  }
-
-  const user = await createOrGetUserProfile(parsed.data);
+  const user = await registerProfile(req.firebaseUser, parsed.data.name);
 
   res.status(201).json({
     success: true,
@@ -40,17 +37,17 @@ export async function createProfile(req: Request, res: Response): Promise<void> 
 
 /**
  * POST /api/auth/sync
- * Header: Authorization: Bearer <supabase access token>
+ * Header: Authorization: Bearer <Firebase ID token>
  *
  * Called after every successful sign-in. Creates the profile when missing and
  * records lastLoginAt / loginCount.
  */
 export async function syncLogin(req: Request, res: Response): Promise<void> {
-  if (!req.supabaseUser) {
+  if (!req.firebaseUser) {
     throw ApiError.unauthorized();
   }
 
-  const user = await syncUserOnLogin(req.supabaseUser);
+  const user = await syncUserOnLogin(req.firebaseUser);
 
   res.json({
     success: true,
@@ -64,9 +61,9 @@ export async function getMe(req: Request, res: Response): Promise<void> {
     throw ApiError.unauthorized();
   }
 
-  const user = await findUserBySupabaseId(req.auth.supabaseId);
+  const user = await findUserByFirebaseUid(req.auth.firebaseUid);
   if (!user) {
-    throw ApiError.notFound("TripMate profile not found");
+    throw ApiError.notFound("TripPilot profile not found");
   }
 
   res.json({

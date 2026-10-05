@@ -18,11 +18,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "TripMate - Plan trips together",
-    template: "%s | TripMate",
+    default: "TripPilot - Plan trips together",
+    template: "%s | TripPilot",
   },
   description:
-    "TripMate is a collaborative trip planning platform where groups decide destinations, build itineraries and split costs together.",
+    "TripPilot is a collaborative trip planning platform where groups decide destinations, build itineraries and split costs together.",
   icons: {
     icon: "/icon.svg",
   },

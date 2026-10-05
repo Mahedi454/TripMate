@@ -42,7 +42,8 @@ interface PasswordStrengthMeterProps {
   password: string;
 }
 
-export const MIN_PASSWORD_LENGTH = 6;
+// Keep in step with Firebase: Authentication -> Settings -> Password policy.
+export const MIN_PASSWORD_LENGTH = 8;
 
 /** Four segment strength bar plus a minimum length check. */
 export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) {

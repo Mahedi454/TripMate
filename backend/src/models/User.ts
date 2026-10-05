@@ -3,7 +3,7 @@ import { USER_ROLES, USER_STATUSES, type UserRole, type UserStatus } from "../ty
 
 export interface UserDoc {
   _id: Types.ObjectId;
-  supabaseId: string;
+  firebaseUid: string;
   name: string;
   email: string;
   avatar: string;
@@ -17,7 +17,7 @@ export interface UserDoc {
 
 const userSchema = new mongoose.Schema<UserDoc>(
   {
-    supabaseId: {
+    firebaseUid: {
       type: String,
       required: true,
       unique: true,

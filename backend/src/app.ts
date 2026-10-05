@@ -1,7 +1,8 @@
 import cors from "cors";
 import express from "express";
 import { env } from "./config/env.js";
-import { errorHandler, notFoundHandler } from "./middleware/error.middleware.js";
+import { connectDatabase } from "./config/db.js";
+import { asyncHandler, errorHandler, notFoundHandler } from "./middleware/error.middleware.js";
 import adminRoutes from "./routes/admin.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import type { HealthResponse } from "./types/auth.js";
@@ -33,9 +34,18 @@ app.get(
   (_req, res) => {
     res.json({
       success: true,
-      message: "TripMate API is running",
+      message: "TripPilot API is running",
     } satisfies HealthResponse);
   },
+);
+
+// On Vercel this file is the entrypoint and server.ts never runs, so the
+// database connection is opened by the first request and then reused.
+app.use(
+  asyncHandler(async (_req, _res, next) => {
+    await connectDatabase();
+    next();
+  }),
 );
 
 app.use("/api/auth", authRoutes);

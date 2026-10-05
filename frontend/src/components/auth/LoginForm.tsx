@@ -10,9 +10,11 @@ import { PasswordInput } from "@/components/auth/PasswordInput";
 import { SocialButton } from "@/components/auth/SocialButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { syncLogin } from "@/lib/api";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { authErrorMessage } from "@/lib/supabase/errors";
+import { sendEmailVerification, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase/client";
+import { authErrorMessage, continueUrl } from "@/lib/firebase/errors";
+import { completeSignIn, safeNextPath } from "@/lib/firebase/session";
+import { useRedirectIfSignedIn } from "@/lib/firebase/useAuthUser";
 
 interface FieldErrors {
   email?: string;
@@ -23,20 +25,21 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const GENERIC_ERROR = "Incorrect email or password";
 
-/** Signs in against Supabase Auth. */
+/** Signs in with Firebase Auth (email and password, or Google). */
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const callbackError = searchParams.get("error");
-  const [formError, setFormError] = useState<string | null>(
-    callbackError
-      ? "We could not complete that sign-in link. Please try again."
-      : null,
-  );
+  const [formError, setFormError] = useState<string | null>(null);
+  /** Shown when the account exists but the email has not been verified yet. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // `next` is set when a protected page sent the visitor here, so the deep link survives.
+  const destination = safeNextPath(searchParams.get("next"));
+
+  useRedirectIfSignedIn(destination);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,6 +56,7 @@ export function LoginForm() {
 
     setFieldErrors(errors);
     setFormError(null);
+    setNotice(null);
 
     if (Object.keys(errors).length > 0) {
       setFormError("Something went wrong");
@@ -62,35 +66,24 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+      const auth = getFirebaseAuth();
+      const { user } = await signInWithEmailAndPassword(auth, email.trim(), password);
 
-      if (error) {
-        setFormError(authErrorMessage(error, GENERIC_ERROR));
+      if (!user.emailVerified) {
+        // Send a fresh link (the old one may have expired), then sign back out:
+        // unverified accounts must not get in.
+        await sendEmailVerification(user, { url: continueUrl("/login") }).catch(() => undefined);
+        await signOut(auth);
+        setNotice(
+          `Please verify your email first. We've sent a new verification link to ${user.email ?? email.trim()}.`,
+        );
         return;
       }
 
-      // Records the login in MongoDB. If that fails (backend down, account
-      // suspended) the Supabase session is dropped so the two never disagree.
-      try {
-        await syncLogin(data.session.access_token);
-      } catch (syncError) {
-        await supabase.auth.signOut();
-        setFormError(syncError instanceof Error ? syncError.message : GENERIC_ERROR);
-        return;
-      }
-
-      // `next` is set by the route guard so a deep link survives the sign-in.
-      const next = searchParams.get("next");
-      const destination = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
-
+      await completeSignIn(user);
       router.replace(destination);
-      router.refresh();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : GENERIC_ERROR);
+      setFormError(authErrorMessage(error, GENERIC_ERROR));
     } finally {
       setIsLoading(false);
     }
@@ -101,6 +94,8 @@ export function LoginForm() {
       {formError ? (
         <AuthAlert title={formError} message="Please check your information and try again." />
       ) : null}
+
+      {notice ? <AuthAlert variant="info" title="Check your inbox" message={notice} /> : null}
 
       <Input
         label="Email address"
@@ -153,7 +148,13 @@ export function LoginForm() {
 
       <AuthDivider />
 
-      <SocialButton />
+      <SocialButton
+        redirectTo={destination}
+        onAuthError={(message) => {
+          setNotice(null);
+          setFormError(message);
+        }}
+      />
 
       <p className="mt-1 text-center text-sm text-ink-soft sm:mt-2">
         Don&apos;t have an account?{" "}

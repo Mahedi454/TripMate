@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { AuthLayout } from "@/components/auth/AuthLayout";
+import { SUPPORT_EMAIL } from "@/components/legal/LegalPage";
 import { LoginForm } from "@/components/auth/LoginForm";
 
 export const metadata: Metadata = {
   title: "Sign in",
-  description: "Sign in to TripMate to continue planning your next adventure.",
+  description: "Sign in to TripPilot to continue planning your next adventure.",
 };
 
 export default function LoginPage() {
@@ -15,7 +16,7 @@ export default function LoginPage() {
       heroImage="/images/Login.png"
       headerAction={
         <a
-          href="mailto:support@tripmate.app"
+          href={`mailto:${SUPPORT_EMAIL}`}
           className="-my-2 inline-flex min-h-10 items-center rounded px-1 text-[13px] font-medium text-ink-soft transition-colors hover:text-night sm:text-xs"
         >
           Need help?

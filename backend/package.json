@@ -1,9 +1,9 @@
 {
-  "name": "tripmate-backend",
+  "name": "trippilot-backend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "TripMate API — Express + TypeScript + MongoDB + Supabase Auth",
+  "description": "TripPilot API — Express + TypeScript + MongoDB + Firebase Auth",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -15,10 +15,10 @@
     "node": ">=20.11"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.47.10",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "firebase-admin": "^14.5.0",
     "mongoose": "^8.9.2",
     "zod": "^3.24.1"
   },

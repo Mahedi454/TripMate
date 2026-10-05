@@ -1,4 +1,4 @@
-# TripMate
+# TripPilot
 
 **Plan together. Decide together. Travel together.**
 

@@ -1,58 +1,40 @@
-import { createClient, type SupabaseClient, type User as SupabaseAuthUser } from "@supabase/supabase-js";
+import type { DecodedIdToken } from "firebase-admin/auth";
 import { env } from "../config/env.js";
+import { getFirebaseAuth } from "../config/firebase.js";
 import { User, type UserDoc } from "../models/User.js";
 import { ApiError } from "../middleware/error.middleware.js";
-import type { CreateProfileInput } from "../schemas/auth.schema.js";
 import type { PublicUser } from "../types/auth.js";
 
-let supabaseAdmin: SupabaseClient | null = null;
+const EMAIL_NOT_VERIFIED = "Please verify your email address before signing in.";
 
 /**
- * Service-role client. Server side only - never import this into frontend code.
- * Used to confirm that a Supabase auth account really exists.
+ * Verifies a Firebase ID token and returns its claims.
+ * `checkRevoked` also rejects tokens of disabled accounts and of users whose
+ * sessions were revoked, at the cost of one extra lookup.
  */
-export function getSupabaseAdmin(): SupabaseClient {
-  if (!supabaseAdmin) {
-    supabaseAdmin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-  }
-  return supabaseAdmin;
-}
-
-/**
- * Verifies a Supabase access token and returns the underlying auth user.
- * Throws 401 when the token is missing, malformed or expired.
- */
-export async function verifyAccessToken(accessToken: string): Promise<SupabaseAuthUser> {
-  const { data, error } = await getSupabaseAdmin().auth.getUser(accessToken);
-
-  if (error || !data.user) {
+export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
+  try {
+    return await getFirebaseAuth().verifyIdToken(idToken, true);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "auth/user-disabled") {
+      throw ApiError.forbidden("This account has been disabled");
+    }
     throw ApiError.unauthorized("Invalid or expired session");
   }
-
-  return data.user;
 }
 
-/**
- * Confirms the Supabase auth account exists before a profile is created,
- * so the API cannot be used to register arbitrary identities.
- */
-export async function assertSupabaseUserExists(supabaseId: string): Promise<void> {
-  const { data, error } = await getSupabaseAdmin().auth.admin.getUserById(supabaseId);
-
-  if (error || !data.user) {
-    throw ApiError.unauthorized("Supabase authentication account not found");
+/** Password accounts must click the verification link; Google accounts arrive verified. */
+export function assertEmailVerified(token: DecodedIdToken): void {
+  if (token.email_verified !== true) {
+    throw ApiError.forbidden(EMAIL_NOT_VERIFIED);
   }
 }
 
 function toPublicUser(doc: UserDoc): PublicUser {
   return {
     id: doc._id.toString(),
-    supabaseId: doc.supabaseId,
+    firebaseUid: doc.firebaseUid,
     name: doc.name,
     email: doc.email,
     avatar: doc.avatar,
@@ -65,75 +47,85 @@ function toPublicUser(doc: UserDoc): PublicUser {
   };
 }
 
-/**
- * Creates the TripMate profile for a freshly registered Supabase user.
- * Idempotent: calling it again returns the existing document.
- * `role` and `status` are set by the server only.
- */
-export async function createOrGetUserProfile(input: CreateProfileInput): Promise<PublicUser> {
-  await assertSupabaseUserExists(input.supabaseId);
+/** Display name from the token (Google, or set at registration), else the email. */
+function displayNameFor(token: DecodedIdToken): string {
+  const fromToken = typeof token.name === "string" ? token.name.trim() : "";
+  const candidate = (fromToken || (token.email ?? "").split("@")[0] || "").slice(0, 50);
+  return candidate.length >= 2 ? candidate : "TripPilot user";
+}
 
-  const existing = await User.findOne({ supabaseId: input.supabaseId });
+/**
+ * Profiles created before the move to Firebase have no firebaseUid. Once the
+ * owner proves the address (verified token), attach the record to their uid.
+ */
+async function claimLegacyProfile(token: DecodedIdToken, email: string) {
+  if (token.email_verified !== true) {
+    return null;
+  }
+  return User.findOneAndUpdate(
+    { email, firebaseUid: { $exists: false } },
+    { $set: { firebaseUid: token.uid }, $unset: { supabaseId: "" } },
+    { new: true, strict: false },
+  );
+}
+
+/**
+ * Creates the TripPilot profile right after registration, before the email
+ * is verified, so new sign-ups show up in MongoDB immediately. Idempotent.
+ * The sign-in itself is only counted by syncUserOnLogin.
+ */
+export async function registerProfile(token: DecodedIdToken, name: string): Promise<PublicUser> {
+  const email = token.email?.toLowerCase();
+  if (!email) {
+    throw ApiError.badRequest("This account has no email address");
+  }
+
+  const existing = await User.findOne({ firebaseUid: token.uid });
   if (existing) {
     return toPublicUser(existing.toObject());
   }
 
   try {
     const created = await User.create({
-      supabaseId: input.supabaseId,
-      name: input.name,
-      email: input.email,
+      firebaseUid: token.uid,
+      name,
+      email,
       avatar: "",
-      role: "user",
+      role: env.adminEmails.includes(email) && token.email_verified === true ? "admin" : "user",
       status: "active",
     });
     return toPublicUser(created.toObject());
   } catch (error) {
-    // 11000 = duplicate key: a parallel request won the race.
     if (isDuplicateKeyError(error)) {
-      const raced = await User.findOne({ supabaseId: input.supabaseId });
+      // A parallel request won the race, or the email belongs to an older profile.
+      const raced = await User.findOne({ firebaseUid: token.uid });
       if (raced) {
         return toPublicUser(raced.toObject());
       }
+      throw ApiError.conflict("Another TripPilot profile already uses this email");
     }
     throw error;
   }
 }
 
-function readMetadataString(metadata: Record<string, unknown> | undefined, key: string): string {
-  const value = metadata?.[key];
-  return typeof value === "string" ? value.trim() : "";
-}
-
-/** Display name from signUp metadata (`full_name`) or Google (`name`), else the email. */
-function displayNameFor(supabaseUser: SupabaseAuthUser): string {
-  const metadata = supabaseUser.user_metadata as Record<string, unknown> | undefined;
-  const candidate =
-    readMetadataString(metadata, "full_name") ||
-    readMetadataString(metadata, "name") ||
-    (supabaseUser.email ?? "").split("@")[0] ||
-    "";
-  const name = candidate.slice(0, 50);
-  return name.length >= 2 ? name : "TripMate user";
-}
-
 /**
- * Called after every successful sign-in (password, Google, email link).
+ * Called after every successful sign-in (password or Google).
  * Creates the MongoDB profile if it is missing and records the login.
  * Emails listed in ADMIN_EMAILS are promoted to admin here.
  */
-export async function syncUserOnLogin(supabaseUser: SupabaseAuthUser): Promise<PublicUser> {
-  const email = supabaseUser.email?.toLowerCase();
+export async function syncUserOnLogin(token: DecodedIdToken): Promise<PublicUser> {
+  const email = token.email?.toLowerCase();
   if (!email) {
     throw ApiError.badRequest("This account has no email address");
   }
+  assertEmailVerified(token);
 
-  const existing = await User.findOne({ supabaseId: supabaseUser.id });
+  const existing =
+    (await User.findOne({ firebaseUid: token.uid })) ?? (await claimLegacyProfile(token, email));
   if (existing?.status === "suspended") {
     throw ApiError.forbidden("This account has been suspended");
   }
 
-  const metadata = supabaseUser.user_metadata as Record<string, unknown> | undefined;
   const set: Record<string, unknown> = { email, lastLoginAt: new Date() };
   if (env.adminEmails.includes(email)) {
     set.role = "admin";
@@ -141,14 +133,14 @@ export async function syncUserOnLogin(supabaseUser: SupabaseAuthUser): Promise<P
 
   try {
     const updated = await User.findOneAndUpdate(
-      { supabaseId: supabaseUser.id },
+      { firebaseUid: token.uid },
       {
         $set: set,
         $inc: { loginCount: 1 },
         // Only applied when the profile is created by this call.
         $setOnInsert: {
-          name: displayNameFor(supabaseUser),
-          avatar: readMetadataString(metadata, "avatar_url"),
+          name: displayNameFor(token),
+          avatar: typeof token.picture === "string" ? token.picture : "",
         },
       },
       { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
@@ -156,7 +148,7 @@ export async function syncUserOnLogin(supabaseUser: SupabaseAuthUser): Promise<P
     return toPublicUser(updated.toObject());
   } catch (error) {
     if (isDuplicateKeyError(error)) {
-      throw ApiError.conflict("Another TripMate profile already uses this email");
+      throw ApiError.conflict("Another TripPilot profile already uses this email");
     }
     throw error;
   }
@@ -168,8 +160,8 @@ export async function listUsers(): Promise<PublicUser[]> {
   return users.map((user) => toPublicUser(user.toObject()));
 }
 
-export async function findUserBySupabaseId(supabaseId: string): Promise<PublicUser | null> {
-  const user = await User.findOne({ supabaseId });
+export async function findUserByFirebaseUid(firebaseUid: string): Promise<PublicUser | null> {
+  const user = await User.findOne({ firebaseUid });
   return user ? toPublicUser(user.toObject()) : null;
 }
 

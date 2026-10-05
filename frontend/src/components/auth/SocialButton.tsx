@@ -1,13 +1,20 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { forwardRef, useState, type ButtonHTMLAttributes, type MouseEvent } from "react";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { Button } from "@/components/ui/Button";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { callbackUrl } from "@/lib/supabase/errors";
+import { getFirebaseAuth } from "@/lib/firebase/client";
+import { authErrorMessage, CANCELLED_POPUP_CODES, firebaseErrorCode } from "@/lib/firebase/errors";
+import { completeSignIn } from "@/lib/firebase/session";
 
 export interface SocialButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   label?: string;
-  /** Supplying this replaces the built in OAuth handler. */
+  /** Where to go once signed in. */
+  redirectTo?: string;
+  /** Receives a message to show when the Google sign-in fails. */
+  onAuthError?: (message: string) => void;
+  /** Supplying this replaces the built in Google handler. */
   onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
 }
 
@@ -35,25 +42,16 @@ function GoogleMark() {
   );
 }
 
-/** Starts the Google OAuth flow. The redirect returns through /auth/callback. */
-async function handleGoogleSignIn() {
-  const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: callbackUrl("/auth/callback?next=/dashboard") },
-  });
-
-  if (error) {
-    throw error;
-  }
-}
-
 /** Outlined "Continue with Google" button. */
 export const SocialButton = forwardRef<HTMLButtonElement, SocialButtonProps>(
-  function SocialButton({ label = "Continue with Google", onClick, ...rest }, ref) {
+  function SocialButton(
+    { label = "Continue with Google", redirectTo = "/dashboard", onAuthError, onClick, ...rest },
+    ref,
+  ) {
+    const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
 
-    async function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
+    async function handleClick(event: MouseEvent<HTMLButtonElement>) {
       if (onClick) {
         onClick(event);
         return;
@@ -63,10 +61,19 @@ export const SocialButton = forwardRef<HTMLButtonElement, SocialButtonProps>(
       setIsLoading(true);
 
       try {
-        // Leaves the page, so the loading state only shows if it fails.
-        await handleGoogleSignIn();
-      } catch {
+        const provider = new GoogleAuthProvider();
+        // Always show the account chooser, so people can switch Google accounts.
+        provider.setCustomParameters({ prompt: "select_account" });
+        const { user } = await signInWithPopup(getFirebaseAuth(), provider);
+        await completeSignIn(user);
+        router.replace(redirectTo);
+      } catch (error) {
         setIsLoading(false);
+        const code = firebaseErrorCode(error);
+        if (code && CANCELLED_POPUP_CODES.has(code)) {
+          return;
+        }
+        onAuthError?.(authErrorMessage(error, "Google sign-in failed. Please try again."));
       }
     }
 
@@ -79,7 +86,7 @@ export const SocialButton = forwardRef<HTMLButtonElement, SocialButtonProps>(
         className="gap-3 text-sm shadow-sm active:scale-[0.985]"
         leadingIcon={<GoogleMark />}
         isLoading={isLoading}
-        loadingText="Opening Google..."
+        loadingText="Signing in with Google..."
         onClick={handleClick}
         {...rest}
       >

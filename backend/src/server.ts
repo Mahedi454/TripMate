@@ -12,7 +12,7 @@ async function bootstrap(): Promise<void> {
   }
 
   const server: Server = app.listen(env.PORT, () => {
-    console.log(`[server] TripMate API listening on http://localhost:${env.PORT}`);
+    console.log(`[server] TripPilot API listening on http://localhost:${env.PORT}`);
     console.log(`[server] environment: ${env.NODE_ENV}`);
     console.log(`[server] allowed frontend origins: ${env.allowedOrigins.join(", ")}`);
   });

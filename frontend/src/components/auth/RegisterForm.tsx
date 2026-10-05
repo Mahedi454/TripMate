@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Mail, ShieldCheck, UserRound } from "lucide-react";
 import { AuthAlert } from "@/components/auth/AuthAlert";
@@ -15,9 +14,16 @@ import {
 import { SocialButton } from "@/components/auth/SocialButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { apiRequest, syncLogin } from "@/lib/api";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { authErrorMessage, callbackUrl } from "@/lib/supabase/errors";
+import {
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
+import { registerProfile } from "@/lib/api";
+import { getFirebaseAuth } from "@/lib/firebase/client";
+import { authErrorMessage, continueUrl } from "@/lib/firebase/errors";
+import { useRedirectIfSignedIn } from "@/lib/firebase/useAuthUser";
 
 interface FieldErrors {
   name?: string;
@@ -35,9 +41,8 @@ const MASKED_DOTS = "tracking-[0.18em]";
 
 const GENERIC_ERROR = "We could not create your account";
 
-/** Creates the account through Supabase Auth. */
+/** Creates the account with Firebase Auth and asks the user to verify their email. */
 export function RegisterForm() {
-  const router = useRouter();
   const [values, setValues] = useState({
     name: "",
     email: "",
@@ -48,8 +53,10 @@ export function RegisterForm() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  /** Set when the project requires email confirmation before a session exists. */
+  /** Set once the account exists and the verification email has been sent. */
   const [awaitingConfirmation, setAwaitingConfirmation] = useState<string | null>(null);
+
+  useRedirectIfSignedIn();
 
   function updateField(field: keyof typeof values, value: string) {
     setValues((previous) => ({ ...previous, [field]: value }));
@@ -90,56 +97,26 @@ export function RegisterForm() {
     setIsLoading(true);
 
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error } = await supabase.auth.signUp({
-        email: values.email.trim(),
-        password: values.password,
-        options: {
-          // signUp only accepts email and password, so the name rides along as
-          // metadata. A database trigger copies it into public.profiles.
-          data: { full_name: values.name.trim() },
-          emailRedirectTo: callbackUrl("/auth/callback?next=/dashboard"),
-        },
-      });
+      const auth = getFirebaseAuth();
+      const name = values.name.trim();
+      const { user } = await createUserWithEmailAndPassword(auth, values.email.trim(), values.password);
+      await updateProfile(user, { displayName: name });
 
-      if (error) {
-        setFormError(authErrorMessage(error, GENERIC_ERROR));
-        return;
+      // Save the profile now so the registration shows up in MongoDB straight
+      // away. Not fatal: /api/auth/sync creates it on their first sign-in.
+      try {
+        await registerProfile(await user.getIdToken(), name);
+      } catch (profileError) {
+        console.warn("[register] could not create the TripPilot profile yet", profileError);
       }
 
-      if (data.session) {
-        // Email confirmation is off, so they are signed in already. This also
-        // creates the MongoDB profile and counts the first login.
-        try {
-          await syncLogin(data.session.access_token);
-        } catch (syncError) {
-          await supabase.auth.signOut();
-          setFormError(syncError instanceof Error ? syncError.message : GENERIC_ERROR);
-          return;
-        }
-        router.replace("/dashboard");
-        router.refresh();
-        return;
-      }
-
-      // Email confirmation is on: no session yet, but save the profile now so
-      // the registration shows up in MongoDB straight away. Supabase returns a
-      // user with no identities when the email is already registered.
-      if (data.user && (data.user.identities?.length ?? 0) > 0) {
-        try {
-          await apiRequest("/api/auth/profile", {
-            method: "POST",
-            body: { supabaseId: data.user.id, name: values.name.trim(), email: values.email.trim() },
-          });
-        } catch (profileError) {
-          // Not fatal: /api/auth/sync creates the profile on their first sign-in.
-          console.warn("[register] could not create the TripMate profile yet", profileError);
-        }
-      }
+      await sendEmailVerification(user, { url: continueUrl("/login") });
+      // Firebase signs new accounts in; they must verify their email first.
+      await signOut(auth);
 
       setAwaitingConfirmation(values.email.trim());
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : GENERIC_ERROR);
+      setFormError(authErrorMessage(error, GENERIC_ERROR));
     } finally {
       setIsLoading(false);
     }
@@ -155,7 +132,7 @@ export function RegisterForm() {
         <AuthAlert
           variant="success"
           title="Check your inbox to confirm your email."
-          message={`We sent a confirmation link to ${awaitingConfirmation}. Open it to finish setting up your account.`}
+          message={`We sent a verification link to ${awaitingConfirmation}. Open it, then sign in. Check your spam folder if you cannot see it.`}
         />
       ) : null}
 
@@ -245,13 +222,21 @@ export function RegisterForm() {
           />
           <span className="text-xs leading-normal text-ink-soft">
             I agree to the{" "}
-            <span className="font-medium text-brand-600 underline decoration-line underline-offset-2">
+            <Link
+              href="/terms"
+              target="_blank"
+              className="font-medium text-brand-600 underline decoration-line underline-offset-2 hover:text-brand-700"
+            >
               Terms of Service
-            </span>{" "}
+            </Link>{" "}
             and{" "}
-            <span className="font-medium text-brand-600 underline decoration-line underline-offset-2">
+            <Link
+              href="/privacy"
+              target="_blank"
+              className="font-medium text-brand-600 underline decoration-line underline-offset-2 hover:text-brand-700"
+            >
               Privacy Policy
-            </span>
+            </Link>
           </span>
         </label>
 
@@ -275,7 +260,13 @@ export function RegisterForm() {
 
       <AuthDivider />
 
-      <SocialButton />
+      <SocialButton
+        label="Sign up with Google"
+        onAuthError={(message) => {
+          setAwaitingConfirmation(null);
+          setFormError(message);
+        }}
+      />
 
       <p className="text-center text-xs text-ink-soft">
         Already have an account?{" "}

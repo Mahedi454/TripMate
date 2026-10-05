@@ -1,13 +1,13 @@
 /**
- * Calls the TripMate Express API (backend/). Works from both client and
- * server code; pass the Supabase access token for authenticated routes.
+ * Calls the TripPilot Express API (backend/). Works from both client and
+ * server code; pass the Firebase ID token for authenticated routes.
  */
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000").replace(/\/$/, "");
 
-export interface TripMateUser {
+export interface TripPilotUser {
   id: string;
-  supabaseId: string;
+  firebaseUid: string;
   name: string;
   email: string;
   avatar: string;
@@ -49,7 +49,7 @@ export async function apiRequest<T>(path: string, { method = "GET", token, body 
       cache: "no-store",
     });
   } catch {
-    throw new ApiRequestError(0, "Could not reach the TripMate server. Is the backend running?");
+    throw new ApiRequestError(0, "Could not reach the TripPilot server. Is the backend running?");
   }
 
   const payload = (await response.json().catch(() => null)) as
@@ -57,14 +57,24 @@ export async function apiRequest<T>(path: string, { method = "GET", token, body 
     | null;
 
   if (!response.ok || !payload) {
-    throw new ApiRequestError(response.status, payload?.error?.message ?? "The TripMate server returned an error.");
+    throw new ApiRequestError(response.status, payload?.error?.message ?? "The TripPilot server returned an error.");
   }
 
   return payload;
 }
 
+/** Saves the profile right after registration, before the email is verified. */
+export async function registerProfile(token: string, name: string): Promise<TripPilotUser> {
+  const { user } = await apiRequest<{ user: TripPilotUser }>("/api/auth/register", {
+    method: "POST",
+    token,
+    body: { name },
+  });
+  return user;
+}
+
 /** Records a sign-in in MongoDB and creates the profile when it is missing. */
-export async function syncLogin(token: string): Promise<TripMateUser> {
-  const { user } = await apiRequest<{ user: TripMateUser }>("/api/auth/sync", { method: "POST", token });
+export async function syncLogin(token: string): Promise<TripPilotUser> {
+  const { user } = await apiRequest<{ user: TripPilotUser }>("/api/auth/sync", { method: "POST", token });
   return user;
 }

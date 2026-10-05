@@ -3,16 +3,36 @@ import { env } from "./env.js";
 
 const LOG_PREFIX = "[db]";
 
-/** Opens the Mongoose connection. Throws if MongoDB is unreachable. */
+let connecting: Promise<typeof mongoose> | null = null;
+
+/**
+ * Opens the Mongoose connection, reusing it when already open. Throws if
+ * MongoDB is unreachable. Safe to call on every request: on Vercel there is no
+ * server.ts startup, so app.ts connects lazily through this.
+ */
 export async function connectDatabase(): Promise<typeof mongoose> {
-  mongoose.set("strictQuery", true);
+  if (mongoose.connection.readyState === 1) {
+    return mongoose;
+  }
 
-  await mongoose.connect(env.MONGODB_URI, {
-    serverSelectionTimeoutMS: 10_000,
-  });
+  if (!connecting) {
+    mongoose.set("strictQuery", true);
+    connecting = mongoose
+      .connect(env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 10_000,
+      })
+      .then((connection) => {
+        console.log(`${LOG_PREFIX} connected to MongoDB (${connection.connection.name})`);
+        return connection;
+      })
+      .catch((error: unknown) => {
+        // Let the next request try again instead of caching the failure.
+        connecting = null;
+        throw error;
+      });
+  }
 
-  console.log(`${LOG_PREFIX} connected to MongoDB (${mongoose.connection.name})`);
-  return mongoose;
+  return connecting;
 }
 
 export async function disconnectDatabase(): Promise<void> {

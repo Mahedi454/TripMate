@@ -7,8 +7,15 @@ const envSchema = z.object({
 
   MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
 
-  SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(20, "SUPABASE_SERVICE_ROLE_KEY is required"),
+  // Firebase console -> Project settings -> Service accounts -> Generate new private key.
+  // Server side only, never commit real values.
+  FIREBASE_PROJECT_ID: z.string().min(1, "FIREBASE_PROJECT_ID is required"),
+  FIREBASE_CLIENT_EMAIL: z.string().email("FIREBASE_CLIENT_EMAIL must be the service account email"),
+  // .env files and the Vercel dashboard often store the key with literal "\n".
+  FIREBASE_PRIVATE_KEY: z
+    .string()
+    .min(1, "FIREBASE_PRIVATE_KEY is required")
+    .transform((key) => key.replace(/\\n/g, "\n")),
 
   FRONTEND_URL: z.string().default("http://localhost:3000"),
 

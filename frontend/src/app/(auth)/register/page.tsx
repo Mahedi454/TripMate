@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { AuthLayout } from "@/components/auth/AuthLayout";
+import { SUPPORT_EMAIL } from "@/components/legal/LegalPage";
 import { RegisterForm } from "@/components/auth/RegisterForm";
 
 export const metadata: Metadata = {
   title: "Create your account",
-  description: "Start planning better trips together with TripMate.",
+  description: "Start planning better trips together with TripPilot.",
 };
 
 export default function RegisterPage() {
@@ -13,7 +14,7 @@ export default function RegisterPage() {
       heroImage="/images/Register.png"
       headerAction={
         <a
-          href="mailto:support@tripmate.app"
+          href={`mailto:${SUPPORT_EMAIL}`}
           className="-my-2 inline-flex min-h-10 items-center rounded px-1 text-xs font-medium text-ink-soft transition-colors hover:text-night sm:text-sm"
         >
           Need help?

@@ -6,8 +6,9 @@ import { ArrowLeft, CheckCircle, Mail, Send } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { buttonClasses } from "@/components/ui/button-styles";
 import { Input } from "@/components/ui/Input";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { authErrorMessage, callbackUrl } from "@/lib/supabase/errors";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { getFirebaseAuth } from "@/lib/firebase/client";
+import { authErrorMessage, continueUrl } from "@/lib/firebase/errors";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -67,7 +68,10 @@ function ForgotPasswordSuccess({ email, onTryAnotherEmail }: ForgotPasswordSucce
   );
 }
 
-/** Sends the password reset email through Supabase Auth. */
+/**
+ * Sends the password reset email through Firebase Auth. The link opens
+ * Firebase's own "choose a new password" page, which then returns to /login.
+ */
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
@@ -92,24 +96,16 @@ export function ForgotPasswordForm() {
     setIsLoading(true);
 
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
-        redirectTo: callbackUrl("/reset-password"),
-      });
-
-      if (resetError) {
-        setError(authErrorMessage(resetError, "We could not send that email. Please try again."));
-        return;
-      }
-
+      await sendPasswordResetEmail(getFirebaseAuth(), trimmed, { url: continueUrl("/login") });
       // Always report the same thing, whether or not the address is registered.
       setSubmittedEmail(trimmed);
     } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "We could not reach the authentication service.",
-      );
+      if ((caught as { code?: string }).code === "auth/user-not-found") {
+        // Never reveal which emails have an account.
+        setSubmittedEmail(trimmed);
+        return;
+      }
+      setError(authErrorMessage(caught, "We could not send that email. Please try again."));
     } finally {
       setIsLoading(false);
     }
