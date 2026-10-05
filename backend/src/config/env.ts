@@ -11,11 +11,12 @@ const envSchema = z.object({
   // Server side only, never commit real values.
   FIREBASE_PROJECT_ID: z.string().min(1, "FIREBASE_PROJECT_ID is required"),
   FIREBASE_CLIENT_EMAIL: z.string().email("FIREBASE_CLIENT_EMAIL must be the service account email"),
-  // .env files and the Vercel dashboard often store the key with literal "\n".
+  // .env files and the Vercel dashboard often store the key with literal "\n",
+  // and Vercel keeps quotes pasted around the value, which .env files would strip.
   FIREBASE_PRIVATE_KEY: z
     .string()
     .min(1, "FIREBASE_PRIVATE_KEY is required")
-    .transform((key) => key.replace(/\\n/g, "\n")),
+    .transform((key) => key.trim().replace(/^"|"$/g, "").replace(/\\n/g, "\n")),
 
   FRONTEND_URL: z.string().default("http://localhost:3000"),
 
