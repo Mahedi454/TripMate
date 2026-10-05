@@ -22,3 +22,25 @@ export async function completeSignIn(user: User): Promise<void> {
 export function safeNextPath(next: string | null, fallback = "/dashboard") {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : fallback;
 }
+
+const GOOGLE_REDIRECT_KEY = "trippilot:google-redirect-next";
+
+/** Remembers where to go after a full-page Google sign-in returns. */
+export function rememberGoogleRedirect(next: string) {
+  try {
+    sessionStorage.setItem(GOOGLE_REDIRECT_KEY, next);
+  } catch {
+    // Storage can be unavailable (private mode); the dashboard is the fallback.
+  }
+}
+
+/** Reads and clears the path saved by rememberGoogleRedirect. */
+export function takeGoogleRedirect(): string | null {
+  try {
+    const next = sessionStorage.getItem(GOOGLE_REDIRECT_KEY);
+    sessionStorage.removeItem(GOOGLE_REDIRECT_KEY);
+    return next;
+  } catch {
+    return null;
+  }
+}

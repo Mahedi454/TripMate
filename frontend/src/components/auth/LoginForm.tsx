@@ -39,7 +39,7 @@ export function LoginForm() {
   // `next` is set when a protected page sent the visitor here, so the deep link survives.
   const destination = safeNextPath(searchParams.get("next"));
 
-  useRedirectIfSignedIn(destination);
+  useRedirectIfSignedIn(destination, setFormError);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

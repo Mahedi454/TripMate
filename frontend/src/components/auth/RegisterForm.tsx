@@ -56,7 +56,7 @@ export function RegisterForm() {
   /** Set once the account exists and the verification email has been sent. */
   const [awaitingConfirmation, setAwaitingConfirmation] = useState<string | null>(null);
 
-  useRedirectIfSignedIn();
+  useRedirectIfSignedIn("/dashboard", setFormError);
 
   function updateField(field: keyof typeof values, value: string) {
     setValues((previous) => ({ ...previous, [field]: value }));

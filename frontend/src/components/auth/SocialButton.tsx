@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { forwardRef, useState, type ButtonHTMLAttributes, type MouseEvent } from "react";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect } from "firebase/auth";
 import { Button } from "@/components/ui/Button";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { authErrorMessage, CANCELLED_POPUP_CODES, firebaseErrorCode } from "@/lib/firebase/errors";
-import { completeSignIn } from "@/lib/firebase/session";
+import { completeSignIn, rememberGoogleRedirect } from "@/lib/firebase/session";
 
 export interface SocialButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
   label?: string;
@@ -60,16 +60,31 @@ export const SocialButton = forwardRef<HTMLButtonElement, SocialButtonProps>(
       event.preventDefault();
       setIsLoading(true);
 
+      const auth = getFirebaseAuth();
+      const provider = new GoogleAuthProvider();
+      // Always show the account chooser, so people can switch Google accounts.
+      provider.setCustomParameters({ prompt: "select_account" });
+
       try {
-        const provider = new GoogleAuthProvider();
-        // Always show the account chooser, so people can switch Google accounts.
-        provider.setCustomParameters({ prompt: "select_account" });
-        const { user } = await signInWithPopup(getFirebaseAuth(), provider);
+        const { user } = await signInWithPopup(auth, provider);
         await completeSignIn(user);
         router.replace(redirectTo);
       } catch (error) {
-        setIsLoading(false);
         const code = firebaseErrorCode(error);
+        if (code === "auth/popup-blocked") {
+          // Go through Google in this tab instead. useRedirectIfSignedIn on the
+          // login and register pages finishes the sign-in when the browser comes back.
+          try {
+            rememberGoogleRedirect(redirectTo);
+            await signInWithRedirect(auth, provider);
+            return;
+          } catch (redirectError) {
+            setIsLoading(false);
+            onAuthError?.(authErrorMessage(redirectError, "Google sign-in failed. Please try again."));
+            return;
+          }
+        }
+        setIsLoading(false);
         if (code && CANCELLED_POPUP_CODES.has(code)) {
           return;
         }
