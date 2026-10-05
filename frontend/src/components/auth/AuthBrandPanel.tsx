@@ -56,7 +56,7 @@ export function AuthBrandPanel({ imageSrc = "/images/splash.jpg" }: { imageSrc?:
       />
 
       <div className="relative z-10 flex w-full items-center justify-between gap-3 p-8 xl:p-16 short:p-8">
-        <Logo asLink={false} tone="light" markClassName="size-10" />
+        <Logo asLink={false} tone="light" markClassName="size-12" />
 
         <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/45 px-3 py-1.5 text-[11px] font-medium text-slate-200 shadow-sm backdrop-blur-xl sm:px-3.5 sm:text-xs">
           <span className="relative flex size-2">

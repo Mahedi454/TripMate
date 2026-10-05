@@ -23,9 +23,6 @@ export const metadata: Metadata = {
   },
   description:
     "TripPilot is a collaborative trip planning platform where groups decide destinations, build itineraries and split costs together.",
-  icons: {
-    icon: "/icon.svg",
-  },
 };
 
 export default function RootLayout({
